@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      attendance_codes: {
+        Row: {
+          code: string
+          created_at: string
+          expires_at: string
+          id: string
+          teacher_id: string
+          teacher_name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          teacher_id: string
+          teacher_name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          teacher_id?: string
+          teacher_name?: string
+        }
+        Relationships: []
+      }
+      attendance_records: {
+        Row: {
+          code: string
+          id: string
+          student_id: string
+          student_name: string
+          submitted_at: string
+        }
+        Insert: {
+          code: string
+          id?: string
+          student_id: string
+          student_name: string
+          submitted_at?: string
+        }
+        Update: {
+          code?: string
+          id?: string
+          student_id?: string
+          student_name?: string
+          submitted_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

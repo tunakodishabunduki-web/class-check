@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAttendance } from "@/contexts/AttendanceContext";
+import { useAttendance, AttendanceRecord } from "@/contexts/AttendanceContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,28 +8,46 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, Send, History, CheckCircle2, XCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const StudentDashboard = () => {
   const { user, logout } = useAuth();
   const { submitAttendance, getStudentRecords } = useAttendance();
+  const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
-  const records = getStudentRecords(user?.id || "");
+  const refresh = useCallback(async () => {
+    if (!user) return;
+    const recs = await getStudentRecords(user.id);
+    setRecords(recs);
+  }, [user, getStudentRecords]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || code.length !== 6) {
       setFeedback({ type: "error", message: "Please enter a valid 6-digit code" });
       return;
     }
-    const result = submitAttendance(user.id, user.name, code);
+    setSubmitting(true);
+    const result = await submitAttendance(user.id, user.name, code);
     if (result.success) {
       setFeedback({ type: "success", message: "Attendance recorded successfully!" });
       setCode("");
+      refresh();
     } else {
       setFeedback({ type: "error", message: result.error || "Submission failed" });
     }
+    setSubmitting(false);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
   };
 
   return (
@@ -40,14 +58,13 @@ const StudentDashboard = () => {
             <h1 className="text-xl font-bold">Welcome, {user?.name}</h1>
             <p className="text-sm text-muted-foreground">Student Dashboard</p>
           </div>
-          <Button variant="outline" size="sm" onClick={logout}>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" /> Logout
           </Button>
         </div>
       </header>
 
       <main className="container py-8 space-y-6">
-        {/* Submit Code */}
         <Card className="animate-fade-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -61,38 +78,26 @@ const StudentDashboard = () => {
                 <Input
                   id="code"
                   value={code}
-                  onChange={(e) => {
-                    setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
-                    setFeedback(null);
-                  }}
+                  onChange={(e) => { setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setFeedback(null); }}
                   placeholder="Enter 6-digit code"
                   maxLength={6}
                   className="text-lg tracking-widest"
                 />
               </div>
-              <Button type="submit" size="lg">Submit</Button>
+              <Button type="submit" size="lg" disabled={submitting}>{submitting ? "Submitting..." : "Submit"}</Button>
             </form>
 
             {feedback && (
-              <div
-                className={`mt-4 flex items-center gap-2 rounded-lg p-3 text-sm font-medium ${
-                  feedback.type === "success"
-                    ? "bg-success/10 text-success"
-                    : "bg-destructive/10 text-destructive"
-                }`}
-              >
-                {feedback.type === "success" ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : (
-                  <XCircle className="h-4 w-4" />
-                )}
+              <div className={`mt-4 flex items-center gap-2 rounded-lg p-3 text-sm font-medium ${
+                feedback.type === "success" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+              }`}>
+                {feedback.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                 {feedback.message}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* History */}
         <Card className="animate-fade-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -113,15 +118,13 @@ const StudentDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[...records].reverse().map((r) => {
-                      const d = new Date(r.timestamp);
+                    {records.map((r) => {
+                      const d = new Date(r.submitted_at);
                       return (
                         <TableRow key={r.id}>
                           <TableCell>{d.toLocaleDateString()}</TableCell>
                           <TableCell className="text-muted-foreground">{d.toLocaleTimeString()}</TableCell>
-                          <TableCell>
-                            <Badge className="bg-success text-success-foreground">Present</Badge>
-                          </TableCell>
+                          <TableCell><Badge className="bg-success text-success-foreground">Present</Badge></TableCell>
                         </TableRow>
                       );
                     })}
