@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAttendance } from "@/contexts/AttendanceContext";
+import { useAttendance, AttendanceCode, AttendanceRecord } from "@/contexts/AttendanceContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { KeyRound, LogOut, Clock, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const formatTime = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -17,38 +18,63 @@ const formatTime = (ms: number) => {
 const TeacherDashboard = () => {
   const { user, logout } = useAuth();
   const { generateCode, getActiveCodes, getTeacherRecords } = useAttendance();
+  const navigate = useNavigate();
+  const [activeCodes, setActiveCodes] = useState<AttendanceCode[]>([]);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [, setTick] = useState(0);
 
-  // Re-render every second for countdown
+  const refresh = useCallback(async () => {
+    if (!user) return;
+    const [codes, recs] = await Promise.all([
+      getActiveCodes(user.id),
+      getTeacherRecords(user.id),
+    ]);
+    setActiveCodes(codes);
+    setRecords(recs);
+  }, [user, getActiveCodes, getTeacherRecords]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(() => {
+      refresh();
+      setTick((t) => t + 1);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  // Tick every second for countdown display
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const activeCodes = getActiveCodes().filter((c) => c.teacherId === user?.id);
-  const records = getTeacherRecords(user?.id || "");
+  const handleGenerate = async () => {
+    if (user) {
+      await generateCode(user.id, user.name);
+      refresh();
+    }
+  };
 
-  const handleGenerate = () => {
-    if (user) generateCode(user.id, user.name);
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card">
         <div className="container flex items-center justify-between py-4">
           <div>
             <h1 className="text-xl font-bold">Welcome, {user?.name}</h1>
             <p className="text-sm text-muted-foreground">Teacher Dashboard</p>
           </div>
-          <Button variant="outline" size="sm" onClick={logout}>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" /> Logout
           </Button>
         </div>
       </header>
 
       <main className="container py-8 space-y-6">
-        {/* Generate Code */}
         <Card className="animate-fade-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -56,13 +82,10 @@ const TeacherDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Button onClick={handleGenerate} size="lg">
-              Generate New Code
-            </Button>
+            <Button onClick={handleGenerate} size="lg">Generate New Code</Button>
           </CardContent>
         </Card>
 
-        {/* Active Codes */}
         {activeCodes.length > 0 && (
           <Card className="animate-fade-in">
             <CardHeader>
@@ -73,12 +96,9 @@ const TeacherDashboard = () => {
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {activeCodes.map((c) => {
-                  const remaining = c.expiresAt - Date.now();
+                  const remaining = new Date(c.expires_at).getTime() - Date.now();
                   return (
-                    <div
-                      key={c.code}
-                      className="flex flex-col items-center rounded-xl border bg-muted/50 p-6 animate-pulse-code"
-                    >
+                    <div key={c.code} className="flex flex-col items-center rounded-xl border bg-muted/50 p-6">
                       <span className="text-4xl font-bold tracking-widest text-primary">{c.code}</span>
                       <Badge variant={remaining < 60000 ? "destructive" : "secondary"} className="mt-3">
                         {formatTime(remaining)} remaining
@@ -91,7 +111,6 @@ const TeacherDashboard = () => {
           </Card>
         )}
 
-        {/* Attendance Records */}
         <Card className="animate-fade-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -114,13 +133,9 @@ const TeacherDashboard = () => {
                   <TableBody>
                     {records.map((r) => (
                       <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.studentName}</TableCell>
-                        <TableCell>
-                          <code className="rounded bg-muted px-2 py-0.5 text-sm">{r.code}</code>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(r.timestamp).toLocaleString()}
-                        </TableCell>
+                        <TableCell className="font-medium">{r.student_name}</TableCell>
+                        <TableCell><code className="rounded bg-muted px-2 py-0.5 text-sm">{r.code}</code></TableCell>
+                        <TableCell className="text-muted-foreground">{new Date(r.submitted_at).toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

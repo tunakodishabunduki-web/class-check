@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,30 +15,34 @@ const LoginPage = () => {
   const [name, setName] = useState("");
   const [role, setRole] = useState<UserRole>("student");
   const [error, setError] = useState("");
-  const { login, register } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const { user, loading, login, register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!loading && user) navigate("/dashboard", { replace: true });
+  }, [user, loading, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
 
-    if (isLogin) {
-      const result = login(email, password);
-      if (result.success) {
-        navigate("/dashboard");
+    try {
+      if (isLogin) {
+        const result = await login(email, password);
+        if (!result.success) setError(result.error || "Login failed");
       } else {
-        setError(result.error || "Login failed");
+        if (!name.trim()) { setError("Name is required"); setSubmitting(false); return; }
+        const result = await register(name, email, password, role);
+        if (!result.success) setError(result.error || "Registration failed");
       }
-    } else {
-      if (!name.trim()) { setError("Name is required"); return; }
-      const result = register(name, email, password, role);
-      if (result.success) {
-        navigate("/dashboard");
-      } else {
-        setError(result.error || "Registration failed");
-      }
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Loading...</p></div>;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -53,7 +57,6 @@ const LoginPage = () => {
           </p>
         </CardHeader>
         <CardContent>
-          {/* Toggle */}
           <div className="mb-6 flex rounded-lg bg-muted p-1">
             <button
               onClick={() => { setIsLogin(true); setError(""); }}
@@ -105,14 +108,10 @@ const LoginPage = () => {
               <p className="text-sm text-destructive font-medium">{error}</p>
             )}
 
-            <Button type="submit" className="w-full" size="lg">
-              {isLogin ? "Sign In" : "Create Account"}
+            <Button type="submit" className="w-full" size="lg" disabled={submitting}>
+              {submitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
             </Button>
           </form>
-
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            Demo: teacher@test.com / student@test.com (password: password)
-          </p>
         </CardContent>
       </Card>
     </div>
